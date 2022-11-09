@@ -16,14 +16,34 @@ contract JBAnonPayer {
   error JBAnonPayer_UNAUTHORIZED();
   error JBAnonPayer_TERMINAL_NOT_FOUND();
 
+  IJBDirectory internal directory;
+  uint256 internal projectId;
   address internal sender;
-  
-  function pay(
+  uint256 internal fcDeadline;
+
+  constructor(
     IJBDirectory _directory,
     uint256 _projectId,
-    address _token,
-    address _sender
+    address _sender,
+    uint256 _fcDeadline
+  ){
+    directory = _directory;
+    projectId = _projectId;
+    sender = _sender;
+    fcDeadline = _fcDeadline;
+  }
+
+  function pay(
+    address _token
   ) external {
+    address _sender = sender;
+    uint256 _projectId = projectId;
+    IJBDirectory _directory = directory;
+
+    // If the fundingCycle deadline has already passed then the funds get refunded to the sender
+    uint256 _currentFc = _directory.fundingCycleStore().currentOf(_projectId).number;
+    if (_currentFc > fcDeadline) return _refund(_token, _sender);
+
     // Find the terminal for the specified project.
     IJBPaymentTerminal _terminal = _directory.primaryTerminalOf(_projectId, _token);
 
@@ -47,24 +67,22 @@ contract JBAnonPayer {
       _projectId,
       _amount, // ignored if the token is JBTokens.ETH.
       _token,
-      address(this),
+      _sender, // Forward the tokens to the sender
       0,
       false, // prefer claimed?
       'ghost contribution',
       new bytes(0)
     );
-
-    // Keep trace of the original sender, to insure sweep beneficiary
-    sender = _sender;
   }
 
-  // sweep eth or token (authentication based on the deployer/funder address)
-  function sweep() external {
-    payable(sender).transfer(address(this).balance);
+  function _refund(address _token, address _sender) internal {
+    // Send the assets back to the original sender
+    if(_token == JBTokens.ETH) {
+      payable(_sender).transfer(address(this).balance);
+    }
+    else {
+      uint256 _amount = IERC20(_token).balanceOf(address(this));
+      IERC20(_token).transfer(_sender, _amount);
+    }
   }
-
-  function sweep(address _token) external {
-    IERC20(_token).transfer(sender, IERC20(_token).balanceOf(address(this)));
-  }
-
 }
