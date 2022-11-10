@@ -6,6 +6,7 @@ import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol';
 
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import './JBAnonPayerFactory.sol';
 
 
 /**
@@ -13,36 +14,37 @@ import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
          It includes sweeping
 */
 contract JBAnonPayer {
+  error JBAnonPayer_INCORRECT_PARAMS();
   error JBAnonPayer_UNAUTHORIZED();
   error JBAnonPayer_TERMINAL_NOT_FOUND();
 
-  IJBDirectory internal directory;
-  uint256 internal projectId;
-  address internal sender;
-  uint256 internal fcDeadline;
-
-  constructor(
-    IJBDirectory _directory,
-    uint256 _projectId,
-    address _sender,
-    uint256 _fcDeadline
-  ){
-    directory = _directory;
-    projectId = _projectId;
-    sender = _sender;
-    fcDeadline = _fcDeadline;
-  }
+  // Calculate what the factory address would be
+  JBAnonPayerFactory constant _factory = JBAnonPayerFactory(0x647720a03a6C68E86D6C5d83a4028b755DaF9302);
 
   function pay(
-    address _token
+    uint256 _projectId,
+    address _sender,
+    uint256 _fcDeadline,
+    address _token,
+    bytes32 _pepper
   ) external {
-    address _sender = sender;
-    uint256 _projectId = projectId;
-    IJBDirectory _directory = directory;
+    // Use the passed params to get the target address
+    address _paramTarget = _factory.getTargetAddress(
+      _projectId,
+      _sender,
+      _fcDeadline,
+      _pepper
+    );
+
+    // Check if this is the address that would get deployed (aka. check if the params are the expected ones)
+    if(_paramTarget != address(this)) revert JBAnonPayer_INCORRECT_PARAMS();
+
+    // Get the directory address
+    IJBDirectory _directory = _factory.directory();
 
     // If the fundingCycle deadline has already passed then the funds get refunded to the sender
     uint256 _currentFc = _directory.fundingCycleStore().currentOf(_projectId).number;
-    if (_currentFc > fcDeadline) return _refund(_token, _sender);
+    if (_currentFc > _fcDeadline) return _refund(_token, _sender);
 
     // Find the terminal for the specified project.
     IJBPaymentTerminal _terminal = _directory.primaryTerminalOf(_projectId, _token);

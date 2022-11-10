@@ -40,7 +40,13 @@ contract JBAnonPayerFactory {
         bytes32 _pepper
     ) external view returns(address _target) {
         bytes memory _creationBytecode = type(JBAnonPayer).creationCode;
-        bytes32 _salt = keccak256(abi.encode(_projectId, _sender, _fcDeadline, _pepper));
+        bytes32 _salt = getSalt(
+            directory,
+            _projectId,
+            _sender,
+            _fcDeadline,
+            _pepper
+        );
 
         bytes32 hash = keccak256(
             abi.encodePacked(bytes1(0xff), address(this), _salt, keccak256(_creationBytecode))
@@ -63,12 +69,34 @@ contract JBAnonPayerFactory {
         bytes32 _pepper,
         address _token
     ) external {
-        bytes32 _salt = keccak256(abi.encode(_projectId, _sender, _fcDeadline, _pepper));
-
-        JBAnonPayer _minion = new JBAnonPayer{salt: _salt}(
-            directory, _projectId, _sender, _fcDeadline
+        bytes32 _salt = getSalt(
+            directory,
+            _projectId,
+            _sender,
+            _fcDeadline,
+            _pepper
         );
 
-        _minion.pay(_token);
+        JBAnonPayer _minion = new JBAnonPayer{salt: _salt}();
+        _minion.pay(_projectId, _sender, _fcDeadline, _token, _pepper);
+    }
+
+
+    function getSalt(
+        IJBDirectory _directory,
+        uint256 _projectId,
+        address _sender,
+        uint256 _fcDeadline,
+        bytes32 _pepper
+    ) public pure returns (bytes32 salt){
+        salt = keccak256(
+            abi.encode(
+                _directory,
+                _projectId,
+                _sender,
+                _fcDeadline,
+                _pepper
+            )
+        );
     }
 }
