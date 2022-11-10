@@ -88,6 +88,8 @@ contract JBAnonPayerFactoryTest is TestBaseWorkflow {
     ) public {
         // This way we don't get a 0 address or precompile addresses
         evm.assume(uint160(_sender) > 100);
+        // We are testing the happy path, so no refunds allowed
+        evm.assume(_fcDeadline > 0);
 
         address _target = factory.getTargetAddress(
             projectId,
@@ -99,6 +101,9 @@ contract JBAnonPayerFactoryTest is TestBaseWorkflow {
         // Fund the ghost payer
         evm.deal(_target, _amount);
 
+        // Get the overflow from before the payment
+        uint256 _oveflowBefore = jbETHPaymentTerminal().currentEthOverflowOf(projectId);
+
         // Deploy and forward the funds to the project
         factory.deployMinion(
             projectId,
@@ -106,6 +111,10 @@ contract JBAnonPayerFactoryTest is TestBaseWorkflow {
             _fcDeadline,
             _pepper,
             JBTokens.ETH
+        );
+
+        assert(
+            _oveflowBefore + _amount == jbETHPaymentTerminal().currentEthOverflowOf(projectId)
         );
     }
 }
