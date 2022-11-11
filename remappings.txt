@@ -1,0 +1,11 @@
+@chainlink/=lib/juice-contracts-v3/lib/chainlink/
+@jbx-protocol/juice-contracts-v3/=lib/juice-contracts-v3/
+@juicebox/=lib/juice-contracts-v3/contracts/
+@openzeppelin/contracts/=lib/juice-contracts-v3/lib/openzeppelin-contracts/contracts/
+@paulrberg/contracts/math/=lib/juice-contracts-v3/lib/prb-math/contracts/
+chainlink/=lib/juice-contracts-v3/lib/chainlink/
+ds-test/=lib/juice-contracts-v3/lib/ds-test/src/
+forge-std/=lib/forge-std/src/
+juice-contracts-v3/=lib/juice-contracts-v3/
+openzeppelin-contracts/contracts/=lib/juice-contracts-v3/lib/openzeppelin-contracts/contracts/
+prb-math/=lib/juice-contracts-v3/lib/prb-math/
