@@ -6,6 +6,7 @@ import '@jbx-protocol/juice-contracts-v3/contracts/interfaces/IJBDirectory.sol';
 import '@jbx-protocol/juice-contracts-v3/contracts/libraries/JBTokens.sol';
 
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import './JBAnonPayerFactory.sol';
 
 
 /**
@@ -13,17 +14,38 @@ import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
          It includes sweeping
 */
 contract JBAnonPayer {
+  error JBAnonPayer_INCORRECT_PARAMS();
   error JBAnonPayer_UNAUTHORIZED();
   error JBAnonPayer_TERMINAL_NOT_FOUND();
 
-  address internal sender;
-  
+  // Calculate what the factory address would be
+  JBAnonPayerFactory constant _factory = JBAnonPayerFactory(0x647720a03a6C68E86D6C5d83a4028b755DaF9302);
+
   function pay(
-    IJBDirectory _directory,
     uint256 _projectId,
+    address _sender,
+    uint256 _fcDeadline,
     address _token,
-    address _sender
+    bytes32 _pepper
   ) external {
+    // Use the passed params to get the target address
+    address _paramTarget = _factory.getTargetAddress(
+      _projectId,
+      _sender,
+      _fcDeadline,
+      _pepper
+    );
+
+    // Check if this is the address that would get deployed (aka. check if the params are the expected ones)
+    if(_paramTarget != address(this)) revert JBAnonPayer_INCORRECT_PARAMS();
+
+    // Get the directory address
+    IJBDirectory _directory = _factory.directory();
+
+    // If the fundingCycle deadline has already passed then the funds get refunded to the sender
+    uint256 _currentFc = _directory.fundingCycleStore().currentOf(_projectId).number;
+    if (_currentFc > _fcDeadline) return _refund(_token, _sender);
+
     // Find the terminal for the specified project.
     IJBPaymentTerminal _terminal = _directory.primaryTerminalOf(_projectId, _token);
 
@@ -47,24 +69,22 @@ contract JBAnonPayer {
       _projectId,
       _amount, // ignored if the token is JBTokens.ETH.
       _token,
-      address(this),
+      _sender, // Forward the tokens to the sender
       0,
       false, // prefer claimed?
       'ghost contribution',
       new bytes(0)
     );
-
-    // Keep trace of the original sender, to insure sweep beneficiary
-    sender = _sender;
   }
 
-  // sweep eth or token (authentication based on the deployer/funder address)
-  function sweep() external {
-    payable(sender).transfer(address(this).balance);
+  function _refund(address _token, address _sender) internal {
+    // Send the assets back to the original sender
+    if(_token == JBTokens.ETH) {
+      payable(_sender).transfer(address(this).balance);
+    }
+    else {
+      uint256 _amount = IERC20(_token).balanceOf(address(this));
+      IERC20(_token).transfer(_sender, _amount);
+    }
   }
-
-  function sweep(address _token) external {
-    IERC20(_token).transfer(sender, IERC20(_token).balanceOf(address(this)));
-  }
-
 }

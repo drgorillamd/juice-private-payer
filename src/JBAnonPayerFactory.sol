@@ -28,10 +28,25 @@ contract JBAnonPayerFactory {
 
     /**
         @notice Helper to get the address where to send fund, prior to anon payer deployment
+        @param _projectId the project to pay
+        @param _sender the address of the user that is paying
+        @param _fcDeadline the funding cycle deadline after which the funds are returned to the user and not paid
+        @param _pepper a random value used by the user to hide their identity
     */
-    function getTargetAddress(uint256 _projectId, address _sender) external view returns(address _target) {
+    function getTargetAddress(
+        uint256 _projectId,
+        address _sender,
+        uint256 _fcDeadline,
+        bytes32 _pepper
+    ) external view returns(address _target) {
         bytes memory _creationBytecode = type(JBAnonPayer).creationCode;
-        bytes32 _salt = keccak256(abi.encode(_projectId, _sender));
+        bytes32 _salt = getSalt(
+            directory,
+            _projectId,
+            _sender,
+            _fcDeadline,
+            _pepper
+        );
 
         bytes32 hash = keccak256(
             abi.encodePacked(bytes1(0xff), address(this), _salt, keccak256(_creationBytecode))
@@ -47,11 +62,41 @@ contract JBAnonPayerFactory {
         @dev    No access control on this deployment/pay, as the funds are considered as already in the
                 Juicebox project
     */
-    function deployMinion(uint256 _projectId, address _sender, address _token) external {
-        bytes32 _salt = keccak256(abi.encode(_projectId, _sender));
+    function deployMinion(
+        uint256 _projectId,
+        address _sender,
+        uint256 _fcDeadline,
+        bytes32 _pepper,
+        address _token
+    ) external {
+        bytes32 _salt = getSalt(
+            directory,
+            _projectId,
+            _sender,
+            _fcDeadline,
+            _pepper
+        );
 
         JBAnonPayer _minion = new JBAnonPayer{salt: _salt}();
+        _minion.pay(_projectId, _sender, _fcDeadline, _token, _pepper);
+    }
 
-        _minion.pay(directory, _projectId, _token, _sender);
+
+    function getSalt(
+        IJBDirectory _directory,
+        uint256 _projectId,
+        address _sender,
+        uint256 _fcDeadline,
+        bytes32 _pepper
+    ) public pure returns (bytes32 salt){
+        salt = keccak256(
+            abi.encode(
+                _directory,
+                _projectId,
+                _sender,
+                _fcDeadline,
+                _pepper
+            )
+        );
     }
 }
